@@ -1,0 +1,10 @@
+# dados pessoais de geração — não publicar
+ares.db
+ares.db-wal
+ares.db-shm
+_deploy_files.json
+__pycache__/
+*.pyc
+
+# notas de integração — locais, não publicar
+ares_api.md

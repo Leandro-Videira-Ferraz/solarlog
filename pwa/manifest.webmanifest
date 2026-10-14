@@ -1,0 +1,16 @@
+{
+  "name": "SolarLog — Monitor Ares",
+  "short_name": "SolarLog",
+  "description": "Monitor de geração dos microinversores solares Ares, com histórico diário da nuvem Ares.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" }
+  ]
+}

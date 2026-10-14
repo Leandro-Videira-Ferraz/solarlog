@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T00:00:00Z",
+  "title": "Design System: SolarLog",
+  "extensions": {
+    "colorMeta": {
+      "amber":     { "role": "primary", "displayName": "Solar Amber", "canonical": "#f5a623", "tonalRamp": ["#2a1d05", "#4a330a", "#6b4a0f", "#8c6213", "#b17d18", "#d1951d", "#f5a623", "#ffcc33"] },
+      "amber-hi":  { "role": "primary", "displayName": "Amber Hi", "canonical": "#ffcc33", "tonalRamp": ["#332800", "#4d3c00", "#665000", "#997800", "#cca000", "#e6b800", "#ffcc33", "#ffe08a"] },
+      "amber-dim": { "role": "primary", "displayName": "Amber Dim", "canonical": "#7a5a1e", "tonalRamp": ["#231a09", "#352711", "#473518", "#5a431e", "#7a5a1e", "#9c7530", "#c09748", "#e0bd7a"] },
+      "bg":        { "role": "neutral", "displayName": "Chassis", "canonical": "#0d0f12", "tonalRamp": ["#0d0f12", "#15181d", "#1b1f26", "#2a2f38", "#4a515e", "#6b7483", "#9aa3b0", "#e8ecf1"] },
+      "panel":     { "role": "neutral", "displayName": "Panel", "canonical": "#15181d", "tonalRamp": ["#0d0f12", "#15181d", "#1b1f26", "#2a2f38", "#4a515e", "#6b7483", "#9aa3b0", "#e8ecf1"] },
+      "panel-2":   { "role": "neutral", "displayName": "Panel 2", "canonical": "#1b1f26", "tonalRamp": ["#0d0f12", "#15181d", "#1b1f26", "#2a2f38", "#4a515e", "#6b7483", "#9aa3b0", "#e8ecf1"] },
+      "seam":      { "role": "neutral", "displayName": "Seam", "canonical": "#2a2f38", "tonalRamp": ["#0d0f12", "#15181d", "#1b1f26", "#2a2f38", "#4a515e", "#6b7483", "#9aa3b0", "#e8ecf1"] },
+      "ink":       { "role": "neutral", "displayName": "Ink", "canonical": "#e8ecf1", "tonalRamp": ["#15181d", "#2a2f38", "#4a515e", "#6b7483", "#848d9b", "#9aa3b0", "#c3cad3", "#e8ecf1"] },
+      "ink-2":     { "role": "neutral", "displayName": "Ink 2", "canonical": "#9aa3b0", "tonalRamp": ["#15181d", "#2a2f38", "#4a515e", "#6b7483", "#848d9b", "#9aa3b0", "#c3cad3", "#e8ecf1"] },
+      "ink-3":     { "role": "neutral", "displayName": "Ink 3", "canonical": "#848d9b", "tonalRamp": ["#15181d", "#2a2f38", "#4a515e", "#6b7483", "#848d9b", "#9aa3b0", "#c3cad3", "#e8ecf1"] },
+      "on":        { "role": "tertiary", "displayName": "Online Green", "canonical": "#36d399", "tonalRamp": ["#0a2a1e", "#0f3f2d", "#15543c", "#1d7a56", "#26a070", "#2ec086", "#36d399", "#7ee6bf"] },
+      "off":       { "role": "tertiary", "displayName": "Offline Red", "canonical": "#f05252", "tonalRamp": ["#2e0f0f", "#451717", "#5c1e1e", "#8a2d2d", "#b83c3c", "#d44545", "#f05252", "#f58a8a"] }
+    },
+    "typographyMeta": {
+      "readout": { "displayName": "Readout", "purpose": "The live instantaneous-power figure — the instrument needle. Amber Hi generating, Ink 3 off." },
+      "title":   { "displayName": "Title", "purpose": "Small-caps tracked panel headers and card headings." },
+      "body":    { "displayName": "Body", "purpose": "Device names and row primary text." },
+      "figure":  { "displayName": "Figure", "purpose": "Secondary real readings in mono tabular — kWh, per-device power, channel metrics." },
+      "label":   { "displayName": "Label", "purpose": "Uppercase tracked section and field labels; nav labels at 10px." }
+    },
+    "shadows": [
+      { "name": "desktop-frame", "value": "0 20px 60px rgba(0,0,0,.5)", "purpose": "The one structural shadow — seats the instrument column on wide (>=600px) viewports." },
+      { "name": "toast-lift", "value": "0 8px 24px rgba(0,0,0,.5)", "purpose": "Floats the transient toast above the fixed nav." },
+      { "name": "live-dot-halo", "value": "0 0 0 4px rgba(245,166,35,.14)", "purpose": "Amber ring glow around the brand-mark live dot (not a drop shadow)." }
+    ],
+    "motion": [
+      { "name": "state", "value": "0.15s", "purpose": "Default transition for color/background/border state changes." },
+      { "name": "breath", "value": "breath 2.2s ease-in-out infinite", "purpose": "Opacity pulse on the live generation indicator." },
+      { "name": "spin", "value": "spin 1s linear infinite", "purpose": "Refresh icon-button while fetching." },
+      { "name": "rise", "value": "rise 0.25s ease-out", "purpose": "Toast entrance." },
+      { "name": "shimmer", "value": "sh 1.3s infinite", "purpose": "Skeleton loading sweep." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}", "purpose": "All motion disabled under reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "column-max", "value": "520px" },
+      { "name": "desktop-frame", "value": "600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width solar-amber action — login submit. The one amber action on its surface.",
+      "html": "<button class=\"ds-btn\">Entrar</button>",
+      "css": ".ds-btn{width:100%;background:var(--amber,#f5a623);color:#1a1205;border:0;font-family:'Archivo',system-ui,sans-serif;font-weight:700;font-size:16px;padding:15px;border-radius:10px;cursor:pointer;letter-spacing:.02em;transition:background .15s,transform .05s}.ds-btn:hover{background:var(--amber-hi,#ffcc33)}.ds-btn:active{transform:translateY(1px)}.ds-btn:focus-visible{outline:2px solid var(--amber,#f5a623);outline-offset:2px}.ds-btn[disabled]{background:var(--amber-dim,#7a5a1e);color:#0d0f12;cursor:not-allowed}"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "iconbtn",
+      "description": "Discreet top-bar action (refresh, logout). Transparent until hover.",
+      "html": "<button class=\"ds-iconbtn\" aria-label=\"Atualizar\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12a9 9 0 1 1-2.64-6.36M21 3v4h-4\"/></svg></button>",
+      "css": ".ds-iconbtn{background:none;border:0;color:var(--ink-2,#9aa3b0);padding:8px;border-radius:8px;cursor:pointer;display:inline-flex;transition:color .15s,background .15s}.ds-iconbtn svg{width:20px;height:20px;display:block}.ds-iconbtn:hover{color:var(--ink,#e8ecf1);background:var(--panel-2,#1b1f26)}.ds-iconbtn:focus-visible{outline:2px solid var(--amber,#f5a623);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Login credential field. Panel fill, seam border, amber on focus.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"u\">Usuário</label><input class=\"ds-input\" id=\"u\" placeholder=\"seu usuário\"></div>",
+      "css": ".ds-field{margin-bottom:16px}.ds-label{display:block;margin-bottom:7px;font-family:'Archivo',system-ui,sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3,#848d9b)}.ds-input{width:100%;background:var(--panel,#15181d);border:1px solid var(--seam,#2a2f38);color:var(--ink,#e8ecf1);font-family:'Archivo',system-ui,sans-serif;font-size:16px;padding:14px;border-radius:10px;transition:border-color .15s}.ds-input::placeholder{color:var(--ink-3,#848d9b)}.ds-input:focus{border-color:var(--amber,#f5a623);outline:none}"
+    },
+    {
+      "name": "Bottom Nav",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Fixed translucent bottom bar; active tab turns amber.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-a on\" href=\"#home\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 11l9-8 9 8M5 10v10h14V10\"/></svg>Painel</a><a class=\"ds-nav-a\" href=\"#history\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 3v18h18M7 15l4-5 3 3 5-7\"/></svg>Histórico</a></nav>",
+      "css": ".ds-nav{display:flex;background:rgba(13,15,18,.86);backdrop-filter:blur(12px);border-top:1px solid var(--seam,#2a2f38)}.ds-nav-a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0 9px;color:var(--ink-3,#848d9b);text-decoration:none;font-family:'Archivo',system-ui,sans-serif;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}.ds-nav-a svg{width:22px;height:22px}.ds-nav-a.on{color:var(--amber,#f5a623)}"
+    },
+    {
+      "name": "Channel Card",
+      "kind": "card",
+      "refersTo": "card-channel",
+      "description": "Inverter-channel detail card: seam border, panel fill, small-caps heading over a 2-col mono metric grid.",
+      "html": "<div class=\"ds-chan\"><h3>Canal 1</h3><div class=\"ds-metrics\"><div class=\"ds-metric\"><span class=\"ds-k\">Potência</span><span class=\"ds-v\">412<span class=\"ds-u\">W</span></span></div><div class=\"ds-metric\"><span class=\"ds-k\">Tensão</span><span class=\"ds-v\">238<span class=\"ds-u\">V</span></span></div><div class=\"ds-metric\"><span class=\"ds-k\">Temp</span><span class=\"ds-v hot\">61<span class=\"ds-u\">°C</span></span></div></div></div>",
+      "css": ".ds-chan{border:1px solid var(--seam,#2a2f38);border-radius:10px;padding:16px;background:var(--panel,#15181d)}.ds-chan h3{font-family:'Archivo',system-ui,sans-serif;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2,#9aa3b0);margin:0 0 12px}.ds-metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px}.ds-k{display:block;margin-bottom:3px;font-family:'Archivo',system-ui,sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3,#848d9b)}.ds-v{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:18px;color:var(--ink,#e8ecf1)}.ds-v .ds-u{font-size:11px;color:var(--ink-3,#848d9b);margin-left:3px}.ds-v.hot{color:var(--amber,#f5a623)}"
+    },
+    {
+      "name": "Device Row",
+      "kind": "custom",
+      "refersTo": "device-row",
+      "description": "Inverter list row: status LED, name over serial, amber mono power, chevron. Nudges on hover.",
+      "html": "<button class=\"ds-dev\"><span class=\"ds-led on\"></span><span class=\"ds-nm\"><b>Inversor A</b><span>SN 1183-00421</span></span><span class=\"ds-pw\">612<span class=\"ds-u\">W</span></span><span class=\"ds-chev\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 6l6 6-6 6\"/></svg></span></button>",
+      "css": ".ds-dev{display:flex;align-items:center;gap:14px;padding:16px 2px;width:100%;text-align:left;cursor:pointer;background:none;border:0;border-bottom:1px solid var(--seam,#2a2f38);color:inherit;transition:transform .15s}.ds-dev:hover{transform:translateX(5px)}.ds-led{width:10px;height:10px;border-radius:50%;flex:none}.ds-led.on{background:var(--on,#36d399)}.ds-led.off{background:var(--off,#f05252)}.ds-nm{flex:1;min-width:0}.ds-nm b{display:block;font-family:'Archivo',system-ui,sans-serif;font-weight:600;font-size:15px;color:var(--ink,#e8ecf1)}.ds-nm span{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--ink-3,#848d9b)}.ds-pw{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:17px;color:var(--amber,#f5a623);text-align:right}.ds-pw .ds-u{font-size:11px;color:var(--ink-3,#848d9b);margin-left:2px}.ds-chev{color:var(--ink-3,#848d9b)}.ds-chev svg{width:16px;height:16px;display:block}"
+    },
+    {
+      "name": "Live Readout",
+      "kind": "custom",
+      "refersTo": "readout",
+      "description": "The instrument face — breathing live dot, giant amber mono power figure, kWh sub-row. The signature component.",
+      "html": "<div class=\"ds-readout\"><div class=\"ds-lab\"><span class=\"ds-live gen\"></span><span class=\"ds-kcaps\">Gerando agora</span></div><div class=\"ds-big\">1.248<span class=\"ds-bu\">W</span></div><div class=\"ds-sub\"><div class=\"ds-stat\"><span class=\"ds-kcaps\">Hoje</span><span class=\"ds-sv\">8.4<span class=\"ds-su\">kWh</span></span></div><div class=\"ds-stat\"><span class=\"ds-kcaps\">Total</span><span class=\"ds-sv\">4210<span class=\"ds-su\">kWh</span></span></div></div></div>",
+      "css": ".ds-readout{padding:10px 16px 20px}.ds-lab{display:flex;align-items:center;gap:8px;margin-bottom:6px}.ds-live{width:7px;height:7px;border-radius:50%;background:var(--ink-3,#848d9b)}.ds-live.gen{background:var(--on,#36d399);animation:dsbreath 2.2s ease-in-out infinite}@keyframes dsbreath{0%,100%{opacity:1}50%{opacity:.35}}.ds-kcaps{font-family:'Archivo',system-ui,sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3,#848d9b)}.ds-big{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:clamp(56px,20vw,84px);font-weight:600;line-height:.92;letter-spacing:-.02em;color:var(--amber-hi,#ffcc33)}.ds-big .ds-bu{font-size:.32em;color:var(--amber,#f5a623);margin-left:.18em;font-weight:400}.ds-sub{display:flex;gap:28px;margin-top:16px}.ds-stat .ds-kcaps{display:block;margin-bottom:3px}.ds-sv{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:19px;color:var(--ink,#e8ecf1)}.ds-sv .ds-su{font-size:12px;color:var(--ink-3,#848d9b);margin-left:3px}"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Transient pill notification above the nav; bad variant borders red.",
+      "html": "<div class=\"ds-toast\">Atualizado 14:32</div>",
+      "css": ".ds-toast{background:var(--panel-2,#1b1f26);border:1px solid var(--seam,#2a2f38);color:var(--ink,#e8ecf1);padding:11px 18px;border-radius:999px;font-family:'Archivo',system-ui,sans-serif;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:inline-flex;align-items:center;gap:9px;animation:dsrise .25s ease-out}.ds-toast.bad{border-color:var(--off,#f05252)}.ds-toast.bad::before{content:\"\";width:7px;height:7px;border-radius:50%;background:var(--off,#f05252)}@keyframes dsrise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calibrated Instrument",
+    "overview": "SolarLog is not a dashboard; it is the readout face of a measuring instrument. The surface reads like the panel of a bench meter: a graphite chassis, a single amber needle, and figures etched in monospace so they look measured rather than styled. Depth is denied - panels are separated by hairline 1px seams, never by stacked cards or drop shadows, so the whole screen reads as one continuous instrument face rather than a deck of widgets. The palette is almost monochrome by discipline. Graphite greys carry every chrome, label, and container; the amber accent is spent only on live generation data and the active state, so the one warm hue on the screen always means 'this is the sun, right now.' Green and red are reserved strictly for online/offline truth. The mood is quiet, technical, and trustworthy: the user believes the numbers because they look aferidos, not decorated. The world is mobile-first and column-bound (max 520px). On wide viewports the column does not float in a black void - it seats into a bordered instrument frame with a single structural shadow, the one deliberate exception to the flat rule.",
+    "keyCharacteristics": [
+      "Graphite chassis, hairline 1px seams instead of cards or shadows",
+      "Amber reserved for live data and active state only",
+      "Monospace tabular figures for every real measurement",
+      "Small-caps tracked labels as the panel-header voice",
+      "Flat by default; one structural shadow for the desktop frame"
+    ],
+    "rules": [
+      { "name": "The Amber-Is-Sunlight Rule", "body": "Amber (any of its three steps) appears only on live generation data and the active/primary state. If a value is not a live reading and not the one primary action, it is ink, not amber. The accent's scarcity is what makes it legible as 'the sun, now.'", "section": "colors" },
+      { "name": "The Two-Signal Rule", "body": "Green means online and red means offline - nothing else. Status color is never used decoratively.", "section": "colors" },
+      { "name": "The Measured-Figure Rule", "body": "Every number that is a real reading is set in the monospace tabular face. Sans-serif is for chrome and prose only; a figure in Archivo would read as decoration, not measurement.", "section": "typography" },
+      { "name": "The Small-Caps Label Rule", "body": "Section and field labels are always uppercase Archivo with wide tracking (0.1em-0.16em), never sentence-case body text.", "section": "typography" },
+      { "name": "The No-Shadow-To-Divide Rule", "body": "Shadows never separate content. Regions divide by 1px Seam lines; shadow is used only to seat the desktop frame, float a toast, or halo the live dot.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do spend amber only on live generation data and the one active/primary state (The Amber-Is-Sunlight Rule).",
+      "Do set every real reading in the monospace tabular face.",
+      "Do divide regions with the 1px Seam hairline, not cards or shadows.",
+      "Do write section and field labels as uppercase tracked Archivo (small caps).",
+      "Do keep inputs at 16px font to prevent mobile zoom.",
+      "Do honor prefers-reduced-motion - all animation and transition is disabled under it."
+    ],
+    "donts": [
+      "Don't use green or red for anything but online/offline status.",
+      "Don't add drop shadows to divide or decorate; shadow is only the desktop frame, the toast, and the live-dot halo.",
+      "Don't stack content as floating cards; the screen is one continuous instrument face.",
+      "Don't set measurement figures in Archivo - that reads as decoration, not instrument output.",
+      "Don't let the column free-float on wide screens; seat it in the instrument frame."
+    ]
+  }
+}
