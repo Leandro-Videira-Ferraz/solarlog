@@ -71,12 +71,9 @@ async function fetchToday(sn) {
 }
 /* leitura ao vivo por canal (tela de detalhe): tem impedância, pico etc. */
 async function fetchChannels(sn) {
-  const out = [];
-  for (let ch = 1; ch <= 4; ch++) {
-    const r = await api("app/plant_statistics/currentDeviceDetail", { params: { snCode: sn, channelNumber: ch } });
-    if (r.code === 200 && r.data) out.push({ ch, ...r.data });  // canal vazio não interrompe os seguintes
-  }
-  return out;
+  const rs = await Promise.all([1, 2, 3, 4].map((ch) =>
+    api("app/plant_statistics/currentDeviceDetail", { params: { snCode: sn, channelNumber: ch } })));
+  return rs.map((r, i) => r.code === 200 && r.data ? { ch: i + 1, ...r.data } : null).filter(Boolean);  // canal vazio não derruba os outros
 }
 
 /* Geração diária de um device, por período (datas YYYY-MM-DD, inclusivas).
@@ -92,7 +89,7 @@ async function fetchDeviceHistory(sn, start, end) {
 async function fetchHistory(days) {
   const end = new Date(), start = new Date();
   start.setDate(end.getDate() - (days - 1));
-  const devices = await fetchDevices();
+  const devices = STATE.devices.length ? STATE.devices : await fetchDevices();   // lista já carregada no painel
   const perDev = await Promise.all(devices.map((d) => fetchDeviceHistory(d.sn, ymd(start), ymd(end))));
   const byDate = new Map();
   for (const rows of perDev) for (const r of rows) {
@@ -130,13 +127,17 @@ function timeSeries(samples) {
 const fmt = (n, d = 0) => (n == null || isNaN(n)) ? "—" : Number(n).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /* ---------- estado em memória ---------- */
-let STATE = { devices: [], series: [], powerNow: 0, kwhToday: 0, totalKwh: 0, updated: null };
+const EMPTY = { devices: [], series: [], powerNow: 0, kwhToday: 0, totalKwh: 0, updated: null };
+let STATE = EMPTY;
+let HIST = null;   // últimos 90 dias (mais recente primeiro); a troca 30/90 só filtra
+const hhmm = (d) => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
 async function loadDashboard() {
   const devices = await fetchDevices();
+  const today = await Promise.all(devices.map((d) => fetchToday(d.sn)));
   let allSamples = [], totalWh = 0, todayWh = 0;
-  for (const d of devices) {
-    const samples = await fetchToday(d.sn);
+  for (const [i, d] of devices.entries()) {
+    const samples = today[i];
     d.samples = samples;
     const sm = summarize(samples);
     d.powerNow = sm.powerNow;
@@ -150,9 +151,10 @@ async function loadDashboard() {
 }
 
 /* ================= TELAS ================= */
-let TAB = "home";
+let VIEW = 0;   // sobe a cada navegação; resposta que chega de uma tela antiga é descartada
 
 function screenLogin() {
+  STATE = EMPTY; HIST = null;   // não mostra dados de uma sessão anterior
   const node = el(`<div class="login">
     <div class="brand">${I.sun}<h1>SolarLog</h1><p>Monitor da sua usina Ares</p></div>
     <form id="lf" novalidate>
@@ -177,13 +179,14 @@ function screenLogin() {
   });
 }
 
-function topbar(onRefresh) {
+function topbar(onRefresh, loading = false) {
   const bar = el(`<div class="bar">
     <div class="mark"><span class="dot"></span>SolarLog</div><div class="sp"></div>
     <button class="iconbtn" id="rf" title="Atualizar" aria-label="Atualizar">${I.refresh}</button>
     <button class="iconbtn" id="lo" title="Sair" aria-label="Sair">${I.logout}</button>
   </div>`);
   bar.querySelector("#rf").addEventListener("click", onRefresh);
+  bar.querySelector("#rf").classList.toggle("spin", loading);
   bar.querySelector("#lo").addEventListener("click", () => { S.token = null; S.uid = null; route("login"); });
   return bar;
 }
@@ -246,11 +249,25 @@ function skeletonDash() {
   );
 }
 
+/* Mostra na hora o último painel carregado (se houver) e atualiza por trás. */
 async function screenDashboard() {
-  skeletonDash();
+  const v = VIEW;
+  if (STATE.updated) renderDash(STATE, true); else skeletonDash();
   let st;
   try { st = await loadDashboard(); }
-  catch (ex) { if (ex instanceof AuthError) return route("login"); return errorScreen("home", screenDashboard); }
+  catch (ex) {
+    if (ex instanceof AuthError) return route("login");
+    if (v !== VIEW) return;
+    if (!STATE.updated) return errorScreen("home", screenDashboard);
+    renderDash(STATE);
+    return toast(`Sem conexão. Dados de ${hhmm(STATE.updated)}`, true);
+  }
+  if (v !== VIEW) return;
+  renderDash(st);
+  toast(`Atualizado ${hhmm(st.updated)}`);
+}
+
+function renderDash(st, loading = false) {
   const off = !st.powerNow;
   const node = el(`<div>
     <div class="readout">
@@ -272,17 +289,18 @@ async function screenDashboard() {
   const devs = node.querySelector(".devs");
   if (st.devices.length) st.devices.forEach((d) => devs.appendChild(deviceRow(d)));
   else devs.appendChild(el(`<div class="empty">${I.off}<p>Nenhum inversor na sua conta.</p></div>`));
-  app.replaceChildren(topbar(() => route("home")), node, navbar("home"));
-  if (st.updated) toast(`Atualizado ${st.updated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`);
+  app.replaceChildren(topbar(() => route("home"), loading), node, navbar("home"));
 }
 
 async function screenDevice(sn) {
+  const v = VIEW;
   const d = STATE.devices.find((x) => x.sn === sn);
   const head = topbar(() => route("device", sn));
   app.replaceChildren(head, el(`<div class="detail"><div class="sk" style="height:140px;margin-bottom:12px"></div><div class="sk" style="height:140px"></div></div>`), navbar("home"));
   let chans;
   try { chans = d?.channels || await fetchChannels(sn); }
-  catch (ex) { if (ex instanceof AuthError) return route("login"); return errorScreen("home", () => screenDevice(sn)); }
+  catch (ex) { if (ex instanceof AuthError) return route("login"); if (v === VIEW) errorScreen("home", () => screenDevice(sn)); return; }
+  if (v !== VIEW) return;
   const node = el(`<div class="detail">
     <div class="phead" style="margin:4px 2px 16px"><span class="t">${esc(d?.name || sn)}</span>
       <span class="meta">${d?.online ? "online" : "offline"}</span></div>
@@ -304,10 +322,29 @@ async function screenDevice(sn) {
 }
 
 const HIST_RANGES = [30, 90];
-let histDays = 30, histReq = 0;
+let histDays = 30;
 try { histDays = HIST_RANGES.includes(+localStorage.getItem("hist_days")) ? +localStorage.getItem("hist_days") : 30; } catch {}
+
+/* Busca 90 dias uma vez; mostra o cache na hora (se houver) e atualiza por trás. */
 async function screenHistory() {
-  const my = ++histReq;
+  const v = VIEW;
+  renderHistory(true);
+  let rows;
+  try { rows = await fetchHistory(Math.max(...HIST_RANGES)); }
+  catch (ex) {
+    if (ex instanceof AuthError) return route("login");
+    if (v !== VIEW) return;
+    if (!HIST) return errorScreen("history", screenHistory);
+    renderHistory();
+    return toast("Sem conexão. Mostrando o último histórico.", true);
+  }
+  if (v !== VIEW) return;
+  HIST = rows;
+  renderHistory();
+}
+
+/* Desenha a partir do cache HIST, filtrado pelo período escolhido (sem nova busca). */
+function renderHistory(loading = false) {
   const ph = el(`<div class="panel" style="padding-bottom:4px">
     <div class="phead"><span class="t">Geração diária</span><span class="meta"></span></div>
     <div class="seg" role="group" aria-label="Período">${HIST_RANGES.map((n) =>
@@ -317,15 +354,16 @@ async function screenHistory() {
     if (+b.dataset.d === histDays) return;
     histDays = +b.dataset.d;
     try { localStorage.setItem("hist_days", histDays); } catch {}
-    screenHistory();
+    renderHistory(document.querySelector("#rf")?.classList.contains("spin"));
   }));
-  app.replaceChildren(topbar(() => route("history")), ph,
-    el(`<div class="hist">${'<div class="sk" style="height:22px;margin:15px 2px"></div>'.repeat(6)}</div>`), navbar("history"));
-  let rows;
-  try { rows = await fetchHistory(histDays); }
-  catch (ex) { if (ex instanceof AuthError) return route("login"); if (my === histReq) errorScreen("history", screenHistory); return; }
-  if (my !== histReq) return;                                       // outro período foi pedido depois
-  if (TAB !== "history") return;                                    // usuário saiu durante o fetch
+  const bar = topbar(() => route("history"), loading);
+  if (!HIST) {
+    app.replaceChildren(bar, ph,
+      el(`<div class="hist">${'<div class="sk" style="height:22px;margin:15px 2px"></div>'.repeat(6)}</div>`), navbar("history"));
+    return;
+  }
+  const from = new Date(); from.setDate(from.getDate() - (histDays - 1));
+  const rows = HIST.filter((r) => r.date >= ymd(from));
   const node = el(`<div class="hist"></div>`);
   if (!rows.length) {
     node.appendChild(el(`<div class="empty">${I.hist}<p>Sem geração registrada na nuvem Ares<br>nos últimos ${histDays} dias.</p></div>`));
@@ -342,7 +380,7 @@ async function screenHistory() {
   }
   const total = rows.reduce((s, r) => s + r.kwh, 0);
   ph.querySelector(".meta").textContent = `${rows.length} dia(s) · ${fmt(total, 0)} kWh`;
-  app.replaceChildren(topbar(() => route("history")), ph, node, navbar("history"));
+  app.replaceChildren(bar, ph, node, navbar("history"));
 }
 
 function errorScreen(tab, retry) {
@@ -366,12 +404,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 let navLock = false; // ignora o hashchange que o próprio route dispara
 function route(name, arg) {
   if (name !== "login" && !S.token) name = "login";
-  TAB = name === "history" ? "history" : "home";
-  if (name !== "device") {
-    navLock = true;
-    location.hash = name === "login" ? "" : name;
-    setTimeout(() => (navLock = false), 0);
-  }
+  VIEW++;
+  navLock = true;                              // detalhe também ganha hash: "Painel" e o voltar do celular funcionam a partir dele
+  location.hash = name === "login" ? "" : name;
+  setTimeout(() => (navLock = false), 0);
   if (name === "login") return screenLogin();
   if (name === "history") return screenHistory();
   if (name === "device") return screenDevice(arg);

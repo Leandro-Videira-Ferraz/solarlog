@@ -1,6 +1,6 @@
 /* SolarLog service worker. Cache do app shell; API sempre na rede. */
-const CACHE = "solarlog-v6";
-const SHELL = ["./", "index.html", "app.css?v=6", "app.js?v=6", "manifest.webmanifest", "icon.svg"];
+const CACHE = "solarlog-v8";
+const SHELL = ["./", "index.html", "app.css?v=8", "app.js?v=8", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
