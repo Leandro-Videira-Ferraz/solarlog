@@ -24,15 +24,19 @@ só na sessão do aparelho e nunca são gravadas no código.
 
 ## Telas
 
-- **Login** — mesmas credenciais do app Ares Cloud.
-- **Painel** — potência instantânea (W), energia de hoje e total (kWh), curva de
-  geração do dia e lista de inversores com status online/offline.
-- **Detalhe do inversor** — por canal: potência, tensão PV, corrente, tensão da
-  rede, temperatura e acumulado.
-- **Histórico** — geração diária em kWh (seletor 30/90 dias), somando os inversores
-  (lida da nuvem Ares, sempre completa).
+- **Login**: as mesmas credenciais do app Ares Cloud.
+- **Agora**: ilustração da usina com o sol na posição real (nascer e pôr), potência agora (kW e % do kWp),
+  energia de hoje, economia em R$, CO₂ evitado, curva do dia, comparação com um dia típico, retorno do
+  investimento com previsão, totais do mês e do ano, e impacto desde a instalação.
+- **Inversor**: conversão DC→AC, potência, tensão e corrente por painel (canal), temperatura,
+  frequência, tensão da rede na faixa da ANEEL e dados do equipamento.
+- **Histórico**: abas Dia, Semana, Mês, Ano e Total. Barras com linha de média, melhor período e
+  comparação com o período anterior. A aba Dia traz potência, temperatura e tensões de hoje.
+- **Alertas**: falta de rede, tensão fora da faixa e temperatura alta, detectados nas leituras do dia.
+  O registro fica salvo no aparelho.
+- **Ajustes**: nome, kWp, tarifa, valor investido, fator de CO₂, localização e tema (sistema, claro ou escuro).
 
-Mobile-first, tema escuro grafite + âmbar, instalável como app (PWA).
+Mobile-first, tema claro e escuro, instalável como app (PWA). Atualiza sozinho a cada 5 minutos.
 
 ## Instalar no celular
 
@@ -113,7 +117,7 @@ solarlog/
 ## Roadmap
 
 - [x] Histórico lendo direto da nuvem Ares → sempre completo, sem depender de PC/app aberto.
-- [ ] Botão de atualizar automático no painel.
+- [x] Atualização automática (5 min) no painel.
 - [ ] Exportar histórico (CSV).
 
 ## Licença
