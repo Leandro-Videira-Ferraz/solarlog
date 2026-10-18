@@ -368,16 +368,19 @@ function screenLogin() {
 
 const isNight = (now) => { const { rise, set } = sunTimes(now, CFG.lat, CFG.lon); return now < rise || now > set; };
 /* ilustração: céu conforme a hora, sol no arco nascer→pôr, casa com painéis */
-function heroArt(now, plain = false) {
+function heroArt(now, plain = false, gen = false) {
   const { rise, set } = sunTimes(now, CFG.lat, CFG.lon);
   const f = (now - rise) / (set - rise);
   const day = f > 0 && f < 1, dusk = day && (f < 0.1 || f > 0.9);
-  const sx = 30 + Math.max(0, Math.min(1, f)) * 340, sy = 160 - Math.sin(Math.max(0, Math.min(1, f)) * Math.PI) * 120;
+  const fc = Math.max(0, Math.min(1, f)), sx = 200 + fc * 150, sy = 150 - Math.sin(fc * Math.PI) * 115;   // fora da área do título
   const sky = !day ? ["#1b2344", "#3d3c63"] : dusk ? ["#f5b98d", "#fde3c4"] : ["#a8d4f2", "#f8ead6"];
   const stars = day ? "" : [[40, 30], [90, 60], [150, 22], [210, 48], [262, 18], [300, 70], [360, 40], [120, 95], [380, 100]]
-    .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 1 : 1.6}" fill="#fff" opacity=".8"/>`).join("");
+    .map(([x, y], i) => `<circle class="star" style="animation-delay:${(i * 0.7) % 3}s" cx="${x}" cy="${y}" r="${i % 3 ? 1 : 1.6}" fill="#fff" opacity=".8"/>`).join("");
   const body = day
-    ? `<circle cx="${sx.toFixed(0)}" cy="${sy.toFixed(0)}" r="34" fill="#fff6d6" opacity=".55"/><circle cx="${sx.toFixed(0)}" cy="${sy.toFixed(0)}" r="20" fill="#ffd34d"/>`
+    ? `<g transform="translate(${sx.toFixed(0)} ${sy.toFixed(0)})"><circle class="glow" r="34" fill="#fff6d6" opacity=".55"/>
+      <g class="rays" stroke="#ffc93d" stroke-width="3" stroke-linecap="round">${Array.from({ length: 10 }, (_, i) => { const a = i * Math.PI / 5;
+        return `<line x1="${(Math.cos(a) * 25).toFixed(1)}" y1="${(Math.sin(a) * 25).toFixed(1)}" x2="${(Math.cos(a) * 31).toFixed(1)}" y2="${(Math.sin(a) * 31).toFixed(1)}"/>`; }).join("")}</g>
+      <circle r="20" fill="#ffd34d"/></g>`
     : `<circle cx="330" cy="48" r="16" fill="#f4f1de"/><circle cx="337" cy="43" r="14" fill="${sky[0]}"/>`;
   const clouds = day ? `<g fill="#fff" opacity=".9"><ellipse cx="250" cy="34" rx="22" ry="7"/><ellipse cx="262" cy="29" rx="12" ry="8"/><ellipse cx="60" cy="132" rx="24" ry="8"/><ellipse cx="74" cy="126" rx="14" ry="9"/><ellipse cx="330" cy="104" rx="22" ry="7"/><ellipse cx="342" cy="99" rx="12" ry="8"/></g>` : "";
   const lit = day ? 1 : 0.55;
@@ -392,9 +395,11 @@ function heroArt(now, plain = false) {
     <g fill="#5f9e4d"><rect x="58" y="176" width="4" height="22" fill="#7a5a3a"/><circle cx="60" cy="168" r="16"/><rect x="96" y="182" width="3" height="18" fill="#7a5a3a"/><circle cx="97" cy="176" r="11"/>
       <rect x="318" y="178" width="4" height="22" fill="#7a5a3a"/><circle cx="320" cy="170" r="14"/></g>
     <path d="M352 112v92M340 122h24" stroke="#6b5440" stroke-width="3"/><path d="M342 123 C300 140 280 145 262 150M362 123 C380 140 392 142 400 140" stroke="#5b4a3d" stroke-width="1" fill="none"/>
+    ${gen ? `<path class="flow" d="M342 123 C300 140 280 145 262 150" stroke="#ffd34d" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="2 10" fill="none"/>` : ""}
     <rect x="146" y="148" width="118" height="58" fill="#f7efe4"/><rect x="146" y="148" width="118" height="58" fill="none" stroke="#e2d4c2"/>
     <path d="M134 151 L162 112 H248 L276 151Z" fill="#c4553a"/>
-    <path d="M160 145 L178 119 H240 L254 145Z" fill="${panel}"/>
+    <clipPath id="pc"><path d="M160 145 L178 119 H240 L254 145Z"/></clipPath><path d="M160 145 L178 119 H240 L254 145Z" fill="${panel}"/>
+    ${gen && day ? `<g clip-path="url(#pc)"><path class="shine" d="M140 150 L160 112 H178 L158 150Z" fill="#fff" opacity=".45"/></g>` : ""}
     <path d="M181 119 L169 145M202 119 L195 145M221 119 L224 145M170 132 H247" stroke="#9cc0ea" stroke-width="1" opacity=".7"/>
     <rect x="198" y="174" width="18" height="32" rx="2" fill="#b0704a"/>
     <rect x="160" y="164" width="24" height="18" rx="2" fill="${win}"/><rect x="228" y="164" width="24" height="18" rx="2" fill="${win}"/>
@@ -458,7 +463,7 @@ function renderHome(st, loading = false) {
   }
   const [tv, tu] = energy(st.totalKwh);
   const node = el(`<div class="scr">
-    <header class="hero${isNight(now) ? " night" : ""}">${heroArt(now)}
+    <header class="hero${isNight(now) ? " night" : ""}">${heroArt(now, false, st.powerNow > 0)}
       <div class="htop"><div>
         <h1>${esc(CFG.name || "Minha usina")}</h1>
         <p class="st"><i class="led ${online ? "on" : "off"}"></i>${online ? "Online" : "Offline"}${leitura ? ` · leitura das ${leitura}` : ""}</p>

@@ -37,6 +37,16 @@ h1,h2,h3,p{margin:0}
 /* ===== hero ===== */
 .hero{position:relative;height:300px;overflow:hidden}
 .hero .art{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* animações da ilustração (desligadas por prefers-reduced-motion no fim do arquivo) */
+.art .rays{transform-box:fill-box;transform-origin:center;animation:spin 24s linear infinite}
+.art .glow{transform-box:fill-box;transform-origin:center;animation:glow 3.2s ease-in-out infinite}
+@keyframes glow{50%{transform:scale(1.18);opacity:.3}}
+.art .shine{animation:shine 4.5s ease-in-out infinite}
+@keyframes shine{0%{transform:translateX(0)}55%,100%{transform:translateX(130px)}}
+.art .flow{animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:24}}
+.art .star{animation:twinkle 3s ease-in-out infinite}
+@keyframes twinkle{50%{opacity:.2}}
 .htop{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
   padding:calc(16px + env(safe-area-inset-top)) var(--gut) 0;color:#1f1c19}
 .hero.night .htop{color:#fff}
