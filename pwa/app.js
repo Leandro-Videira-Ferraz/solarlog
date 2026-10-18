@@ -524,8 +524,10 @@ function renderInverter(d, c, loading = false) {
   const dc = chans.reduce((s, x) => s + (num(x.channelPower) || 0), 0);
   const cps = chans.map((x) => num(x.cityPower)).filter((x) => x != null && x > 0);
   // cityPower: se igual em todos os canais é do inversor; senão, soma por canal
-  const ac = !cps.length ? null : cps.every((x) => x === cps[0]) ? cps[0] : cps.reduce((a, b) => a + b, 0);
-  const eff = ac != null && dc > 0 ? ac / dc : null;
+  const ac0 = !cps.length ? null : cps.every((x) => x === cps[0]) ? cps[0] : cps.reduce((a, b) => a + b, 0);
+  const ac = ac0 != null && dc > 0 && ac0 >= dc * 0.5 && ac0 <= dc * 1.05 ? ac0 : null;   // AW-MIP2.5 manda cityPower que não é a saída AC: só usa se plausível
+  const eff = ac != null ? ac / dc : null;
+  const pk = metricSeries(d.samples || [], METRICS[0]).reduce((m, p) => !m || p.v > m.v ? p : m, null);   // pico de hoje deste inversor (kW)
   const temp = Math.max(...chans.map((x) => num(x.temperature)).filter((x) => x != null), -Infinity);
   const grid = Math.max(...chans.map((x) => num(x.cityVoltage)).filter((x) => x != null), -Infinity);
   const fk = chans.map(FREQ_KEY).find(Boolean), freq = fk ? num(chans.find((x) => x[fk] != null)?.[fk]) : null;
@@ -551,12 +553,12 @@ function renderInverter(d, c, loading = false) {
     ${STATE.devices.length > 1 ? `<div class="chips" role="tablist">${STATE.devices.map((x) =>
       `<button role="tab" data-sn="${esc(x.sn)}" aria-selected="${x.sn === d.sn}"><i class="led ${x.online ? "on" : "off"}"></i>${esc(x.name)}</button>`).join("")}</div>` : ""}
     ${!chans.length ? `<div class="empty">${I.off}<p>Sem leitura dos canais agora.${d.online ? "" : "<br>Inversor offline."}</p></div>` : `
-    <section class="card">${cardHead(I.conv, "Conversão")}
+    ${ac == null ? "" : `<section class="card">${cardHead(I.conv, "Conversão")}
       <div class="conv"><div><span class="k">Painéis (DC)</span><b>${kw(dc)} kW</b></div>
         <div class="flow">${eff != null && eff > 0.5 && eff <= 1.02 ? `<span>${fmt(Math.min(eff, 1) * 100, 0)}%</span>` : ""}</div>
         <div class="r"><span class="k">Saída (AC)</span><b>${ac != null ? kw(ac) + " kW" : "—"}</b></div></div>
-      <p class="sub">Eficiência do inversor: quanto da energia dos painéis vira energia utilizável.</p></section>
-    <section class="card">${cardHead(I.panel, "Painéis (canais)")}
+      <p class="sub">Eficiência do inversor: quanto da energia dos painéis vira energia utilizável.</p></section>`}
+    <section class="card">${cardHead(I.panel, "Painéis (canais)", `total ${fmt(dc, 0)} W`)}
       ${chans.map((x) => { const p = num(x.channelPower) || 0, on = act.includes(x); return `<div class="mppt${on ? "" : " dim"}">
         <div class="l"><b>Painel ${x.ch}</b><span class="w">${on ? `${fmt(p, 0)} W` : "sem painel"}</span></div>
         <div class="prog"><i style="width:${(p / peak * 100).toFixed(1)}%"></i></div>
@@ -564,7 +566,8 @@ function renderInverter(d, c, loading = false) {
       <p class="sub">${weak.length ? `Painel ${weak.map((x) => x.ch).join(", ")} abaixo da média dos outros (sombra ou sujeira?).` : act.length > 1 && mean > 20 ? "Painéis equilibrados." : ""}${empty.length ? ` Canais sem painel: ${empty.join(", ")}.` : ""}</p></section>
     <div class="row2">
       <section class="card mini">${cardHead(I.thermo, "Temperatura")}${isFinite(temp) ? `${gauge(temp, 0, 100, tLab[1])}<div class="gv"><b>${fmt(temp, 0)}°</b><span style="color:${tLab[1]}">${tLab[0]}</span></div>` : "<b>—</b>"}</section>
-      <section class="card mini">${cardHead(I.wave, "Frequência")}<b>${freq ? fmt(freq, 2) + " Hz" : "—"}</b><span class="s">${freq ? (Math.abs(freq - 60) <= 0.5 ? "Dentro do padrão (60 Hz)" : "Fora do padrão (60 Hz)") : "Não informada pelo inversor"}</span></section>
+      ${freq ? `<section class="card mini">${cardHead(I.wave, "Frequência")}<b>${fmt(freq, 2)} Hz</b><span class="s">${Math.abs(freq - 60) <= 0.5 ? "Dentro do padrão (60 Hz)" : "Fora do padrão (60 Hz)"}</span></section>`
+        : `<section class="card mini">${cardHead(I.trophy, "Pico de hoje")}<b>${pk ? fmt(pk.v, 2) + " kW" : "—"}</b><span class="s">${pk ? `às ${String(Math.floor(pk.m / 60)).padStart(2, "0")}:${String(pk.m % 60).padStart(2, "0")}` : "Sem leituras hoje"}${pk && CFG.kwp > 0 && STATE.devices.length ? ` · ${fmt(pk.v / (CFG.kwp / STATE.devices.length) * 100, 0)}% dos painéis` : ""}</span></section>`}
     </div>
     <section class="card">${cardHead(I.plug, "Rede elétrica")}
       ${band ? `<div class="gridv"><b>${fmt(grid, 1)} V</b><span>${ac != null ? fmt(ac / 1000, 2) + " kW" : ""}</span></div>
