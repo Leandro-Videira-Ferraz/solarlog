@@ -255,6 +255,34 @@ const toPts = (arr) => (arr || []).map(([m, v]) => ({ m, v }));
 const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
 const dur = (m) => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
 
+/* dias coletados pelo robô do GitHub (workflow coleta.yml) no branch `data` do próprio repositório */
+const DATA_URL = (() => {
+  const h = location.hostname.match(/^([^.]+)\.github\.io$/), r = location.pathname.split("/")[1];
+  return `https://raw.githubusercontent.com/${h ? h[1] : "Leandro-Videira-Ferraz"}/${h && r ? r : "solarlog"}/data/days/`;
+})();
+let SYNCED = null;   // uma vez por sessão; resolve true se trouxe dia novo
+function syncRemote() {
+  if (SYNCED) return SYNCED;
+  SYNCED = (async () => {
+    const today = ymd(new Date()), sums = loadSums();
+    let changed = false;
+    for (let i = 0; i < 36; i++) {   // mês atual para trás, até o primeiro mês sem arquivo
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+      let data;
+      try { const r = await fetch(DATA_URL + ymd(d).slice(0, 7) + ".json", { cache: "no-cache" }); if (!r.ok) break; data = await r.json(); } catch { break; }
+      const local = loadDays();
+      for (const [k, rec] of Object.entries(data)) {
+        if (k >= today) continue;   // hoje vem ao vivo
+        const n = (x) => (x?.p?.length || 0) + (x?.t?.length || 0);
+        if (n(rec) > n(local[k])) { saveDay(k, rec); saveSum(k, heatStats(toPts(rec.p), toPts(rec.t))); changed = true; }
+        else if (!sums[k] && rec.t?.length) { saveSum(k, heatStats(toPts(rec.p), toPts(rec.t))); changed = true; }
+      }
+    }
+    return changed;
+  })();
+  return SYNCED;
+}
+
 /* Perda por calor (estimativa): potência dos painéis cai CFG.tcoef %/°C acima de 25 °C.
    Usa a temperatura do microinversor (preso sob os painéis) como aproximação da dos painéis. */
 const HOT = 60;
@@ -309,6 +337,7 @@ async function loadDashboard() {
   saveSum(key, heatStats(series, temps));
   STATE = { devices, samples, series, temps, powerNow, kwhToday: todayWh / 1000, totalKwh: totalWh / 1000, latest, updated: new Date() };
   recordAlerts(devices);
+  syncRemote().then((ch) => { if (ch && CUR === "history") renderHistory(); }).catch(() => {});
   return STATE;
 }
 
@@ -722,6 +751,7 @@ function period(tab, off) {
 async function screenHistory() {
   const v = VIEW;
   renderHistory(true);
+  await syncRemote().catch(() => {});
   try {
     if (H.tab === "day") { if (!STATE.updated) await loadDashboard(); }
     else if (H.tab === "total") {
@@ -802,7 +832,7 @@ function histDay(body, loading) {
         .map(([k, v]) => `<div class="card mini"><span class="k">${k}</span><b>${fmt(v, m.d)} ${m.unit}</b></div>`).join("")}</div></div>`);
     n.querySelector(".cv").appendChild(lineChart(pts, { label: m.label, d: m.d }));
   }
-  n.appendChild(el(`<p class="hint">A nuvem Ares só fornece a curva do dia atual. O SolarLog guarda cada dia neste aparelho quando o app é aberto (até 45 dias).</p>`));
+  n.appendChild(el(`<p class="hint">A nuvem Ares só fornece a curva do dia atual. O SolarLog grava cada dia automaticamente (coleta a cada 30 min pelo GitHub) e também quando o app é aberto.</p>`));
   n.querySelectorAll(".chips button").forEach((b) => b.addEventListener("click", () => { H.metric = b.dataset.m; renderHistory(); }));
   n.querySelectorAll(".pnav button").forEach((b) => b.addEventListener("click", () => { H.day = b.dataset.k === today ? null : b.dataset.k; renderHistory(); }));
   body.appendChild(n);
@@ -846,7 +876,7 @@ function histBars(body, loading) {
       <div class="row3 in"><div><span class="k">Perda estimada</span><b>${fmt(loss, 1)} kWh</b><span class="s">${fmt(gen + loss > 0 ? loss / (gen + loss) * 100 : 0, 0)}% · ${brl(loss * CFG.tarifa)}</span></div>
         <div><span class="k">Dias acima de ${HOT} °C</span><b>${hot}</b><span class="s">de ${hdays.length}</span></div>
         <div><span class="k">Mais quente</span><b>${fmt(hx[0], 0)} °C</b><span class="s">${DOW[hd.getDay()]}, ${dm(hd)}</span></div></div>
-      <p class="sub">Temperatura e perda vêm dos dias guardados neste aparelho (desde ${dm(new Date(Object.keys(sums).sort()[0] + "T12:00"))}). Dia em que o app não foi aberto fica sem esse dado.</p></section>`;
+      <p class="sub">Temperatura e perda dos dias registrados desde ${dm(new Date(Object.keys(sums).sort()[0] + "T12:00"))} (coleta automática a cada 30 min).</p></section>`;
   }
   const unitN = { week: "dia", month: "dia", year: "mês", total: "ano" }[H.tab];
   const bestN = { week: "Melhor dia", month: "Melhor dia", year: "Melhor mês", total: "Melhor ano" }[H.tab];

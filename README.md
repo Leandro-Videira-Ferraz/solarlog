@@ -68,6 +68,19 @@ Mobile-first, tema claro e escuro, instalável como app (PWA). Atualiza sozinho 
 > ⚠️ Projeto independente, sem vínculo oficial com a Ares Watt. Para uso pessoal,
 > na sua própria conta/sistema.
 
+## Coleta automática (GitHub Actions)
+
+A nuvem Ares só fornece a curva do dia atual. O workflow
+[`coleta.yml`](.github/workflows/coleta.yml) roda a cada 30 min, das 7h às 20h30 (Brasília). Ele grava
+a potência e a temperatura do dia no branch `data` (`days/AAAA-MM.json`), e o app lê de lá. Assim os
+dias ficam registrados mesmo sem abrir o app.
+
+1. Em **Settings → Secrets and variables → Actions**, crie `ARES_USER` e `ARES_PASS` com o login da Ares.
+2. Em **Actions → Coleta do dia (Ares) → Run workflow**, rode uma vez para testar.
+
+O branch `data` é público, como o repositório. Ele guarda só números (potência, temperatura e kWh),
+sem nome, número de série ou login.
+
 ## Coletor opcional (poller)
 
 `poller.py` loga a geração num SQLite (`ares.db`) para análise no PC. **Opcional** —

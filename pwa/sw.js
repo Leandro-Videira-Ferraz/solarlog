@@ -1,6 +1,6 @@
 /* SolarLog service worker. Cache do app shell; API sempre na rede. */
-const CACHE = "solarlog-v13";
-const SHELL = ["./", "index.html", "app.css?v=13", "app.js?v=13", "manifest.webmanifest", "icon.svg"];
+const CACHE = "solarlog-v14";
+const SHELL = ["./", "index.html", "app.css?v=14", "app.js?v=14", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,7 +11,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET") return;                 // login/POST: rede
-  if (u.hostname.includes("areswatt.com")) return;        // API: nunca cacheia
+  if (u.hostname.includes("areswatt.com") || u.hostname === "raw.githubusercontent.com") return;   // API e dados coletados: sempre na rede
 
   const isNav = e.request.mode === "navigate" ||
     (e.request.headers.get("accept") || "").includes("text/html");
