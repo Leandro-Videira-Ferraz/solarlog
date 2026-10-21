@@ -30,7 +30,8 @@ def minute(t):
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "dados"
-    user, pw = os.environ.get("ARES_USER"), os.environ.get("ARES_PASS")
+    # secrets colados com espaço/quebra de linha nas pontas fazem a Ares recusar o login
+    user, pw = (os.environ.get("ARES_USER") or "").strip(), (os.environ.get("ARES_PASS") or "").strip("\r\n")
     if not user or not pw:
         raise SystemExit("defina ARES_USER e ARES_PASS (secrets do repositório)")
     token = login(user, pw)
