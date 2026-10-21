@@ -832,7 +832,7 @@ function histDay(body, loading) {
         .map(([k, v]) => `<div class="card mini"><span class="k">${k}</span><b>${fmt(v, m.d)} ${m.unit}</b></div>`).join("")}</div></div>`);
     n.querySelector(".cv").appendChild(lineChart(pts, { label: m.label, d: m.d }));
   }
-  n.appendChild(el(`<p class="hint">A nuvem Ares só fornece a curva do dia atual. O SolarLog grava cada dia automaticamente (coleta a cada 30 min pelo GitHub) e também quando o app é aberto.</p>`));
+  n.appendChild(el(`<p class="hint">A nuvem Ares só fornece a curva do dia atual. O SolarLog grava cada dia automaticamente (coleta diária pelo GitHub, às 20h45) e também quando o app é aberto.</p>`));
   n.querySelectorAll(".chips button").forEach((b) => b.addEventListener("click", () => { H.metric = b.dataset.m; renderHistory(); }));
   n.querySelectorAll(".pnav button").forEach((b) => b.addEventListener("click", () => { H.day = b.dataset.k === today ? null : b.dataset.k; renderHistory(); }));
   body.appendChild(n);
@@ -876,7 +876,7 @@ function histBars(body, loading) {
       <div class="row3 in"><div><span class="k">Perda estimada</span><b>${fmt(loss, 1)} kWh</b><span class="s">${fmt(gen + loss > 0 ? loss / (gen + loss) * 100 : 0, 0)}% · ${brl(loss * CFG.tarifa)}</span></div>
         <div><span class="k">Dias acima de ${HOT} °C</span><b>${hot}</b><span class="s">de ${hdays.length}</span></div>
         <div><span class="k">Mais quente</span><b>${fmt(hx[0], 0)} °C</b><span class="s">${DOW[hd.getDay()]}, ${dm(hd)}</span></div></div>
-      <p class="sub">Temperatura e perda dos dias registrados desde ${dm(new Date(Object.keys(sums).sort()[0] + "T12:00"))} (coleta automática a cada 30 min).</p></section>`;
+      <p class="sub">Temperatura e perda dos dias registrados desde ${dm(new Date(Object.keys(sums).sort()[0] + "T12:00"))} (coleta automática diária).</p></section>`;
   }
   const unitN = { week: "dia", month: "dia", year: "mês", total: "ano" }[H.tab];
   const bestN = { week: "Melhor dia", month: "Melhor dia", year: "Melhor mês", total: "Melhor ano" }[H.tab];

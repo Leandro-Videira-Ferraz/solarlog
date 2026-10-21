@@ -4,7 +4,10 @@ name: Coleta do dia (Ares)
 # Precisa dos secrets ARES_USER e ARES_PASS (Settings > Secrets and variables > Actions).
 on:
   schedule:
-    - cron: "*/30 10-23 * * *"   # 07:00–20:30 em Brasília
+    # A curva do dia da Ares já traz potência e temperatura: 1 coleta à noite basta.
+    # Segunda tentativa porque o GitHub às vezes atrasa ou pula execuções agendadas.
+    - cron: "45 23 * * *"   # 20:45 em Brasília
+    - cron: "15 1 * * *"    # 22:15 em Brasília
   workflow_dispatch:
 permissions:
   contents: write
