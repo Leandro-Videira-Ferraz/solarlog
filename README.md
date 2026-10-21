@@ -71,7 +71,7 @@ Mobile-first, tema claro e escuro, instalável como app (PWA). Atualiza sozinho 
 ## Coleta automática (GitHub Actions)
 
 A nuvem Ares só fornece a curva do dia atual. O workflow
-[`coleta.yml`](.github/workflows/coleta.yml) roda a cada 30 min, das 7h às 20h30 (Brasília). Ele grava
+[`coleta.yml`](.github/workflows/coleta.yml) roda todo dia às 20h45, com uma segunda tentativa às 22h15 (Brasília). Ele grava
 a potência e a temperatura do dia no branch `data` (`days/AAAA-MM.json`), e o app lê de lá. Assim os
 dias ficam registrados mesmo sem abrir o app.
 
