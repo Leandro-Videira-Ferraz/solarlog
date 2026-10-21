@@ -242,6 +242,15 @@ function saveDay(key, rec) {
   try { localStorage.setItem(DAYS_KEY, JSON.stringify(all)); } catch {}
 }
 const r1 = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
+/* resumo de calor por dia (sem limite de 45 dias): {YYYY-MM-DD: [temp. máx °C, min acima de HOT, perda estimada kWh]} */
+const SUM_KEY = "solarlog_daysum";
+const loadSums = () => { try { return JSON.parse(localStorage.getItem(SUM_KEY) || "{}"); } catch { return {}; } };
+function saveSum(key, hs) {
+  if (!hs) return;
+  const all = loadSums(); all[key] = [r1(hs.max.v, 1), hs.hotMin, r1(hs.lossKwh, 3)];
+  const ks = Object.keys(all).sort(); while (ks.length > 1500) delete all[ks.shift()];
+  try { localStorage.setItem(SUM_KEY, JSON.stringify(all)); } catch {}
+}
 const toPts = (arr) => (arr || []).map(([m, v]) => ({ m, v }));
 const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
 const dur = (m) => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
@@ -297,6 +306,7 @@ async function loadDashboard() {
     if (isFinite(v) && !temps.some((p) => Math.abs(p.m - m) < 4)) temps.push({ m, v });
   }
   saveDay(key, { p: series.map((p) => [p.m, r1(p.v, 3)]), t: temps.map((p) => [p.m, r1(p.v, 1)]), kwh: r1(todayWh / 1000, 2) });
+  saveSum(key, heatStats(series, temps));
   STATE = { devices, samples, series, temps, powerNow, kwhToday: todayWh / 1000, totalKwh: totalWh / 1000, latest, updated: new Date() };
   recordAlerts(devices);
   return STATE;
@@ -377,25 +387,39 @@ function heatText(hs) {
 
 /* gráfico de barras com linha de média e balão do selecionado. bs: [{lab, tip, v}] */
 function barChart(bs, sel, onSel, avg) {
-  const W = 340, H = 190, pt = 34, pb = 22, n = bs.length;
-  const max = Math.max(0.001, ...bs.map((b) => b.v), avg || 0) * 1.04;
-  const slot = W / n, bw = Math.max(3, Math.min(34, slot * 0.62));
+  const W = 340, H = 190, pt = 34, pb = 22, n = bs.length, pr = bs.some((b) => b.tmax != null) ? 24 : 0;
+  const max = Math.max(0.001, ...bs.map((b) => b.v + (b.loss || 0)), avg || 0) * 1.04;
+  const slot = (W - pr) / n, bw = Math.max(3, Math.min(34, slot * 0.62));
   const y = (v) => pt + (1 - v / max) * (H - pt - pb);
   const every = n > 16 ? Math.ceil(n / 8) : 1;
   const bars = bs.map((b, i) => {
-    const cx = slot * i + slot / 2, h = Math.max(b.v > 0 ? 2 : 0, H - pb - y(b.v));
+    const cx = slot * i + slot / 2, h = Math.max(b.v > 0 ? 2 : 0, H - pb - y(b.v)), lh = b.loss ? H - pb - y(b.loss) : 0;
     return `<g data-i="${i}" class="b${i === sel ? " sel" : ""}"><rect class="hit" x="${(slot * i).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}"/>
       <rect class="bar" x="${(cx - bw / 2).toFixed(1)}" y="${(H - pb - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(6, bw / 2).toFixed(1)}"/>
-      ${i % every === 0 || i === sel ? `<text class="ax" x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(b.lab)}</text>` : ""}</g>`;
+      ${lh >= 0.5 ? `<rect class="loss" x="${(cx - bw / 2).toFixed(1)}" y="${(H - pb - h - lh).toFixed(1)}" width="${bw.toFixed(1)}" height="${lh.toFixed(1)}" rx="${Math.min(4, bw / 2).toFixed(1)}"/>` : ""}
+      ${i === sel || (i % every === 0 && (sel == null || every === 1 || Math.abs(i - sel) > 1)) ? `<text class="ax" x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(b.lab)}</text>` : ""}</g>`;
   }).join("");
+  // temperatura máxima por balde (escala à direita)
+  let temp = "";
+  const tps = bs.map((b, i) => b.tmax != null ? { i, v: b.tmax } : null).filter(Boolean);
+  if (tps.length) {
+    const tlo = Math.min(20, ...tps.map((p) => p.v)), thi = Math.max(HOT + 10, ...tps.map((p) => p.v));
+    const yt = (v) => pt + (1 - (v - tlo) / (thi - tlo)) * (H - pt - pb), xc = (i) => slot * i + slot / 2;
+    temp = `<line class="thr" x1="0" x2="${W - pr}" y1="${yt(HOT).toFixed(1)}" y2="${yt(HOT).toFixed(1)}"/>
+      <text class="ax tr" x="${W - 2}" y="${(yt(HOT) + 3).toFixed(1)}" text-anchor="end">${HOT}°</text><text class="ax tr" x="${W - 2}" y="${pt + 8}" text-anchor="end">${fmt(thi, 0)}°</text>
+      ${tps.length > 1 ? `<polyline class="tline" points="${tps.map((p) => `${xc(p.i).toFixed(1)},${yt(p.v).toFixed(1)}`).join(" ")}"/>` : ""}
+      ${tps.map((p) => `<circle class="tdot${p.v >= HOT ? " hot" : ""}" cx="${xc(p.i).toFixed(1)}" cy="${yt(p.v).toFixed(1)}" r="2.6"/>`).join("")}`;
+  }
   let tip = "";
   if (sel != null && bs[sel]) {
-    const cx = slot * sel + slot / 2, txt = `${bs[sel].tip}: ${fmt(bs[sel].v, 1)} kWh`, w = txt.length * 6.1 + 16;
+    const b = bs[sel], cx = slot * sel + slot / 2;
+    const txt = `${b.tip}: ${fmt(b.v, 1)} kWh${b.loss >= 0.05 ? ` · calor −${fmt(b.loss, 1)}` : ""}${b.tmax != null ? ` · ${fmt(b.tmax, 0)}°` : ""}`, w = txt.length * 6.1 + 16;
     const bx = Math.min(W - w - 1, Math.max(1, cx - w / 2));
     tip = `<g class="tip"><rect x="${bx.toFixed(1)}" y="2" width="${w.toFixed(1)}" height="22" rx="11"/><text x="${(bx + w / 2).toFixed(1)}" y="17" text-anchor="middle">${esc(txt)}</text></g>`;
   }
   const node = el(`<svg class="chart bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="Energia por período">
-    ${avg ? `<line class="avg" x1="0" x2="${W}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}"/>` : ""}${bars}${tip}</svg>`);
+    <defs><pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="var(--acc)" opacity=".18"/><line x1="0" y1="0" x2="0" y2="4" stroke="var(--acc)" stroke-width="1.6"/></pattern></defs>
+    ${avg ? `<line class="avg" x1="0" x2="${W - pr}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}"/>` : ""}${bars}${temp}${tip}</svg>`);
   node.addEventListener("click", (e) => { const g = e.target.closest("g[data-i]"); if (g) onSel(+g.dataset.i); });
   return node;
 }
@@ -786,7 +810,12 @@ function histDay(body, loading) {
 
 function histBars(body, loading) {
   const p = period(H.tab, H.off), t = day0(new Date());
-  const bs = p.bs.map((b) => ({ ...b, v: b.a > t ? 0 : sumDays(b.a, b.b > t ? t : b.b) }));
+  const sums = loadSums(), daily = H.tab === "week" || H.tab === "month";
+  const bs = p.bs.map((b) => {
+    const v = b.a > t ? 0 : sumDays(b.a, b.b > t ? t : b.b);
+    const hs = b.a > t ? [] : dayList(b.a, b.b > t ? t : b.b).map((d) => [ymd(d), sums[ymd(d)]]).filter(([, x]) => x);
+    return { ...b, v, hs, loss: hs.reduce((a, [, x]) => a + x[2], 0), tmax: daily && hs.length ? hs[0][1][0] : null };
+  });
   const live = bs.filter((b) => b.a <= t);
   const total = live.reduce((s, b) => s + b.v, 0);
   const withGen = live.filter((b) => b.v > 0);
@@ -805,6 +834,20 @@ function histBars(body, loading) {
         <span class="s">${fmt(prevK, 1)} kWh no mesmo trecho ${p.prevName[1]} ${p.prevName[2]}</span></section>`;
     }
   }
+  // calor no período: só dias com temperatura guardada no aparelho
+  const hdays = bs.flatMap((b) => b.hs);
+  let heat = "";
+  if (hdays.length) {
+    const loss = hdays.reduce((a, [, x]) => a + x[2], 0), hot = hdays.filter(([, x]) => x[1] > 0).length;
+    const gen = hdays.reduce((a, [k]) => a + kwhOn(k), 0);
+    const [hk, hx] = hdays.reduce((m, d) => d[1][0] > m[1][0] ? d : m);
+    const hd = new Date(hk + "T12:00");
+    heat = `<section class="card">${cardHead(I.thermo, "Calor no período", `${hdays.length} dia(s) com leitura`)}
+      <div class="row3 in"><div><span class="k">Perda estimada</span><b>${fmt(loss, 1)} kWh</b><span class="s">${fmt(gen + loss > 0 ? loss / (gen + loss) * 100 : 0, 0)}% · ${brl(loss * CFG.tarifa)}</span></div>
+        <div><span class="k">Dias acima de ${HOT} °C</span><b>${hot}</b><span class="s">de ${hdays.length}</span></div>
+        <div><span class="k">Mais quente</span><b>${fmt(hx[0], 0)} °C</b><span class="s">${DOW[hd.getDay()]}, ${dm(hd)}</span></div></div>
+      <p class="sub">Temperatura e perda vêm dos dias guardados neste aparelho (desde ${dm(new Date(Object.keys(sums).sort()[0] + "T12:00"))}). Dia em que o app não foi aberto fica sem esse dado.</p></section>`;
+  }
   const unitN = { week: "dia", month: "dia", year: "mês", total: "ano" }[H.tab];
   const bestN = { week: "Melhor dia", month: "Melhor dia", year: "Melhor mês", total: "Melhor ano" }[H.tab];
   const [tv, tu] = energy(total);
@@ -812,7 +855,9 @@ function histBars(body, loading) {
     <div class="pnav">${H.tab === "total" ? "<span></span>" : `<button class="iconbtn" data-o="1" aria-label="Período anterior">${I.chevL}</button>`}
       <b>${esc(p.label)}</b>${H.tab === "total" || H.off === 0 ? "<span></span>" : `<button class="iconbtn" data-o="-1" aria-label="Próximo período">${I.chevR}</button>`}</div>
     <section class="card">${cardHead(I.bars, H.tab === "year" ? "Energia por mês" : H.tab === "total" ? "Energia por ano" : "Energia por dia", avg ? '<span class="lg">— média</span>' : "")}<div class="cv"></div>
+      ${hdays.length ? `<div class="legend"><span><i class="lb"></i>Geração</span><span><i class="lh"></i>Perda por calor (estim.)</span>${daily ? '<span><i class="lt"></i>Temp. máx.</span>' : ""}</div>` : ""}
       <p class="sub c">Toque numa barra para ver o valor</p></section>
+    ${heat}
     <div class="row2">
       <section class="card mini">${cardHead(I.coin, "Total")}<b>${tv} ${tu}</b><span class="s ok">${brl(total * CFG.tarifa)}</span></section>
       <section class="card mini">${cardHead(I.cal, `Média por ${unitN}`)}<b>${fmt(avg, avg >= 100 ? 0 : 1)} kWh</b><span class="s">${withGen.length} ${unitN === "mês" ? "mes(es)" : unitN + "(s)"} com geração</span></section>
@@ -1000,5 +1045,7 @@ setInterval(autoRefresh, 30e3);
 document.addEventListener("visibilitychange", autoRefresh);
 
 /* ---------- boot ---------- */
+/* dias guardados antes do resumo de calor existir: calcula uma vez */
+try { const sums = loadSums(); for (const [k, r] of Object.entries(loadDays())) if (!sums[k]) saveSum(k, heatStats(toPts(r.p), toPts(r.t))); } catch {}
 route(S.token ? (location.hash.slice(1) || "home") : "login");
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
