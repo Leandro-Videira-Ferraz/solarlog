@@ -1,0 +1,44 @@
+name: Coleta do dia (Ares)
+# Grava a curva de potência e temperatura do dia no branch `data` (um único commit, sobrescrito).
+# O app lê de raw.githubusercontent.com e preenche os dias em que não foi aberto.
+# Precisa dos secrets ARES_USER e ARES_PASS (Settings > Secrets and variables > Actions).
+on:
+  schedule:
+    - cron: "*/30 10-23 * * *"   # 07:00–20:30 em Brasília
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: coleta
+  cancel-in-progress: false
+jobs:
+  coleta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TZ: America/Sao_Paulo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: app
+      - name: Baixa os dados atuais (branch data)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir dados && cd dados && git init -q
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 origin data; then git checkout -q FETCH_HEAD -- .; fi
+          find . -path ./.git -prune -o -type f -print | sort | xargs -r sha1sum > ../antes.txt
+      - name: Coleta na nuvem Ares
+        env:
+          ARES_USER: ${{ secrets.ARES_USER }}
+          ARES_PASS: ${{ secrets.ARES_PASS }}
+        run: python3 app/scripts/coleta.py dados/days
+      - name: Publica no branch data
+        run: |
+          cd dados
+          find . -path ./.git -prune -o -type f -print | sort | xargs -r sha1sum > ../depois.txt
+          if cmp -s ../antes.txt ../depois.txt; then echo "sem mudanças"; exit 0; fi
+          git add -A
+          git -c user.name="solarlog-bot" -c user.email="solarlog-bot@users.noreply.github.com" commit -qm "Dados até $(date '+%Y-%m-%d %H:%M')"
+          git push -qf origin HEAD:data
