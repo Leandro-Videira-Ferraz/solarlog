@@ -41,7 +41,7 @@ const CFG = (() => {
   let c = {};
   try { c = JSON.parse(localStorage.getItem("solarlog_cfg") || "{}"); } catch {}
   // co2: fator médio do SIN (MCTI) em kg/kWh; tarifa e kWp editáveis em Ajustes
-  return { name: "", tarifa: 0.9, invest: 0, kwp: 0, co2: 0.0385, theme: "system", lat: -23.55, lon: -46.63, geo: false, ...c };
+  return { name: "", tarifa: 0.9, invest: 0, kwp: 0, co2: 0.0385, tcoef: 0.30, theme: "system", lat: -23.55, lon: -46.63, geo: false, ...c };
 })();
 const saveCfg = () => { try { localStorage.setItem("solarlog_cfg", JSON.stringify(CFG)); } catch {} };
 
@@ -232,8 +232,40 @@ const brl = (n) => "R$ " + fmt(n, 2);
 const kw = (w) => fmt(w / 1000, w >= 10000 ? 1 : 2);
 const energy = (kwh) => kwh >= 1000 ? [fmt(kwh / 1000, 1), "MWh"] : [fmt(kwh, kwh >= 100 ? 0 : 1), "kWh"];
 
+/* ---------- dias guardados no aparelho: potência e temperatura por horário ----------
+   A nuvem Ares só dá a curva do dia atual; cada abertura do app grava o dia (até 45 dias). */
+const DAYS_KEY = "solarlog_days";
+const loadDays = () => { try { return JSON.parse(localStorage.getItem(DAYS_KEY) || "{}"); } catch { return {}; } };
+function saveDay(key, rec) {
+  const all = loadDays(); all[key] = rec;
+  const ks = Object.keys(all).sort(); while (ks.length > 45) delete all[ks.shift()];
+  try { localStorage.setItem(DAYS_KEY, JSON.stringify(all)); } catch {}
+}
+const r1 = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
+const toPts = (arr) => (arr || []).map(([m, v]) => ({ m, v }));
+const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
+const dur = (m) => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
+
+/* Perda por calor (estimativa): potência dos painéis cai CFG.tcoef %/°C acima de 25 °C.
+   Usa a temperatura do microinversor (preso sob os painéis) como aproximação da dos painéis. */
+const HOT = 60;
+const tempAt = (tp, m) => { let b = null; for (const p of tp) if (Math.abs(p.m - m) <= 15 && (!b || Math.abs(p.m - m) < Math.abs(b.m - m))) b = p; return b ? b.v : null; };
+const heatFactor = (T) => T != null && T > 25 ? Math.min(0.5, CFG.tcoef / 100 * (T - 25)) : 0;
+function heatStats(pw, tp) {
+  if (!tp.length) return null;
+  let lossKwh = 0, genKwh = 0, hotMin = 0;
+  for (let i = 1; i < pw.length; i++) {
+    const dt = (pw[i].m - pw[i - 1].m) / 60; if (dt <= 0 || dt > 0.5) continue;
+    const f = heatFactor(tempAt(tp, pw[i].m));
+    genKwh += pw[i].v * dt; lossKwh += pw[i].v * f / (1 - f) * dt;
+  }
+  for (let i = 1; i < tp.length; i++) { const dt = tp[i].m - tp[i - 1].m; if (dt <= 15 && tp[i].v >= HOT) hotMin += dt; }
+  const max = tp.reduce((a, b) => b.v > a.v ? b : a);
+  return { max, hotMin, lossKwh, pct: genKwh + lossKwh > 0 ? lossKwh / (genKwh + lossKwh) : 0 };
+}
+
 /* ---------- estado em memória ---------- */
-const EMPTY = { devices: [], samples: [], series: [], powerNow: 0, kwhToday: 0, totalKwh: 0, latest: "", updated: null };
+const EMPTY = { devices: [], samples: [], series: [], temps: [], powerNow: 0, kwhToday: 0, totalKwh: 0, latest: "", updated: null };
 let STATE = EMPTY;
 const CHAN = new Map();   // sn -> {at, chans}
 
@@ -255,7 +287,17 @@ async function loadDashboard() {
   }
   await histP;
   const powerNow = devices.reduce((s, d) => s + (d.powerNow || 0), 0);
-  STATE = { devices, samples, series: metricSeries(samples, METRICS[0]), powerNow, kwhToday: todayWh / 1000, totalKwh: totalWh / 1000, latest, updated: new Date() };
+  const key = ymd(t), series = metricSeries(samples, METRICS[0]);
+  let temps = metricSeries(samples, METRICS[1]);
+  if (!temps.length && devices.length) {   // amostras sem temperatura: grava a leitura ao vivo a cada atualização
+    const m = t.getHours() * 60 + t.getMinutes();
+    const rs = await Promise.all(devices.map((d) => api("app/plant_statistics/currentDeviceDetail", { params: { snCode: d.sn, channelNumber: 1 } }).catch(() => null)));
+    const v = Math.max(...rs.map((r) => num(r?.data?.temperature)).filter((x) => x != null));
+    temps = toPts(loadDays()[key]?.t);
+    if (isFinite(v) && !temps.some((p) => Math.abs(p.m - m) < 4)) temps.push({ m, v });
+  }
+  saveDay(key, { p: series.map((p) => [p.m, r1(p.v, 3)]), t: temps.map((p) => [p.m, r1(p.v, 1)]), kwh: r1(todayWh / 1000, 2) });
+  STATE = { devices, samples, series, temps, powerNow, kwhToday: todayWh / 1000, totalKwh: totalWh / 1000, latest, updated: new Date() };
   recordAlerts(devices);
   return STATE;
 }
@@ -296,6 +338,41 @@ function lineChart(pts, { label = "Gráfico", d = 1 } = {}) {
     <path d="${area}" fill="url(#${id})"/><path class="line" d="${line}"/>
     <line class="base" x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}"/>${axis}
   </svg>`);
+}
+
+/* potência (área, kW) × temperatura (linha, °C), com faixas acima de HOT e a curva estimada sem perda por calor */
+function dualChart(pw, tp, label = "Potência e temperatura") {
+  const W = 340, H = 170, pl = 4, pr = 28, pt = 10, pb = 20;
+  const ms = [...pw, ...tp].map((p) => p.m);
+  if (!ms.length) return lineChart([], { label });
+  const lo = Math.min(360, ...ms), hi = Math.max(1080, ...ms);
+  const x = (m) => pl + (m - lo) / (hi - lo) * (W - pl - pr);
+  const ideal = pw.map((p) => ({ m: p.m, v: p.v / (1 - heatFactor(tempAt(tp, p.m))) }));
+  const pmax = Math.max(0.1, ...ideal.map((p) => p.v)) * 1.08;
+  const tlo = Math.min(20, ...tp.map((p) => p.v)), thi = Math.max(HOT + 10, ...tp.map((p) => p.v));
+  const yp = (v) => pt + (1 - v / pmax) * (H - pt - pb), yt = (v) => pt + (1 - (v - tlo) / (thi - tlo)) * (H - pt - pb);
+  const path = (pts, y) => pts.map((p, i) => (i ? "L" : "M") + x(p.m).toFixed(1) + " " + y(p.v).toFixed(1)).join(" ");
+  const bands = []; let run = null;
+  for (const p of tp) { if (p.v >= HOT) { if (run && p.m - run.b <= 15) run.b = p.m; else { run && bands.push(run); run = { a: p.m, b: p.m }; } } else if (run) { bands.push(run); run = null; } }
+  run && bands.push(run);
+  const ticks = []; for (let m = Math.ceil(lo / 180) * 180; m <= hi; m += 180) ticks.push(m);
+  const id = "g" + Math.random().toString(36).slice(2, 7);
+  return el(`<svg class="chart dual" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--acc)" stop-opacity=".4"/><stop offset="1" stop-color="var(--acc)" stop-opacity=".03"/></linearGradient></defs>
+    ${bands.map((b) => `<rect class="hot" x="${x(b.a).toFixed(1)}" y="${pt}" width="${Math.max(3, x(b.b) - x(b.a)).toFixed(1)}" height="${H - pt - pb}"/>`).join("")}
+    ${tp.length ? `<line class="thr" x1="0" x2="${W - pr}" y1="${yt(HOT).toFixed(1)}" y2="${yt(HOT).toFixed(1)}"/><text class="ax tr" x="${W - 2}" y="${(yt(HOT) + 3).toFixed(1)}" text-anchor="end">${HOT}°</text>
+      <text class="ax tr" x="${W - 2}" y="${pt + 8}" text-anchor="end">${fmt(thi, 0)}°</text>` : ""}
+    ${pw.length ? `<path d="${path(pw, yp)} L${x(pw[pw.length - 1].m).toFixed(1)} ${H - pb} L${x(pw[0].m).toFixed(1)} ${H - pb} Z" fill="url(#${id})"/>
+      <path class="ideal" d="${path(ideal, yp)}"/><path class="line" d="${path(pw, yp)}"/>` : ""}
+    ${tp.length ? `<path class="tline" d="${path(tp, yt)}"/>` : ""}
+    <line class="base" x1="0" x2="${W - pr}" y1="${H - pb}" y2="${H - pb}"/>
+    ${ticks.map((m) => `<text class="ax" x="${x(m).toFixed(1)}" y="${H - 5}" text-anchor="middle">${hm(m)}</text>`).join("")}
+  </svg>`);
+}
+const LEGEND = `<div class="legend"><span><i class="lp"></i>Potência</span><span><i class="li"></i>Sem perda por calor (estim.)</span><span><i class="lt"></i>Temperatura</span></div>`;
+function heatText(hs) {
+  if (!hs) return "Sem leitura de temperatura neste dia.";
+  return `${hs.hotMin ? `Acima de ${HOT} °C por ${dur(hs.hotMin)}` : `Não passou de ${HOT} °C`} · perda estimada por calor ≈ ${fmt(hs.lossKwh, 1)} kWh (${fmt(hs.pct * 100, 0)}%, ${brl(hs.lossKwh * CFG.tarifa)}).`;
 }
 
 /* gráfico de barras com linha de média e balão do selecionado. bs: [{lab, tip, v}] */
@@ -438,6 +515,7 @@ function renderHome(st, loading = false) {
   const online = st.devices.some((d) => d.online);
   const leitura = st.latest ? st.latest.split(" ")[1]?.slice(0, 5) : st.updated ? hhmm(st.updated) : "";
   const pico = Math.max(0, ...st.series.map((p) => p.v));
+  const hs = heatStats(st.series, st.temps || []);
   const saveToday = st.kwhToday * CFG.tarifa, co2Today = st.kwhToday * CFG.co2;
 
   // mês / ano / dia típico (média dos dias anteriores deste mês; no início do mês, últimos 30 dias)
@@ -482,6 +560,8 @@ function renderHome(st, loading = false) {
         <section class="card mini">${cardHead(I.leaf, "CO₂ evitado hoje")}<b>${fmt(co2Today, co2Today < 10 ? 1 : 0)} kg</b><span class="s">${fmt(CFG.co2, 4)} kg por kWh</span></section>
       </div>
       <section class="card">${cardHead(I.curve, "Curva do dia", `pico ${fmt(pico, 2)} kW`)}<div class="cv"></div></section>
+      <section class="card">${cardHead(I.thermo, "Temperatura × geração", hs ? `máx ${fmt(hs.max.v, 0)} °C às ${hm(hs.max.m)}` : "")}<div class="cv2"></div>${LEGEND}
+        <p class="sub">${heatText(hs)}</p><a class="more" href="#history" id="heat-more">Ver dias anteriores ${I.chevR}</a></section>
       <section class="card">${cardHead(I.bars, "Comparado a um dia típico", pct == null ? "" : `<b class="pc">${fmt(pct * 100, 0)}%</b>`)}
         <div class="blocks">${Array.from({ length: 12 }, (_, i) => `<i class="${i < blocks ? "on" : ""}"></i>`).join("")}</div>
         <p class="sub">${typical ? `${fmt(st.kwhToday, 1)} kWh de ${fmt(typical, 1)} kWh — média dos dias ${prev.length >= 3 && now.getDate() > 3 ? "deste mês" : "recentes"}` : "Sem histórico suficiente para comparar."}</p></section>
@@ -497,6 +577,8 @@ function renderHome(st, loading = false) {
       ${st.devices.length ? "" : `<div class="empty">${I.off}<p>Nenhum inversor na sua conta.</p></div>`}
     </div></div>`);
   node.querySelector(".cv").appendChild(lineChart(st.series, { label: "Curva de geração de hoje", d: 2 }));
+  node.querySelector(".cv2").appendChild(dualChart(st.series, st.temps || []));
+  node.querySelector("#heat-more").addEventListener("click", () => { H.tab = "day"; H.day = null; H.metric = "combo"; });
   app.replaceChildren(node, navbar("home"));
 }
 
@@ -586,7 +668,7 @@ function renderInverter(d, c, loading = false) {
 }
 
 /* ---------- histórico ---------- */
-const H = { tab: "week", off: 0, sel: null, metric: "power" };
+const H = { tab: "week", off: 0, sel: null, metric: "combo", day: null };   // day: YYYY-MM-DD (null = hoje)
 try { Object.assign(H, { tab: localStorage.getItem("hist_tab") || "week" }); } catch {}
 const TABS = [["day", "Dia"], ["week", "Semana"], ["month", "Mês"], ["year", "Ano"], ["total", "Total"]];
 let FIRST_YEAR = null;
@@ -658,21 +740,47 @@ function renderHistory(loading = false) {
 }
 
 function histDay(body, loading) {
-  const ms = METRICS.filter((m) => STATE.samples.some((s) => m.pick(s) != null && (m.agg !== "avg" || m.pick(s) > 0)));
-  if (!ms.length) { body.appendChild(loading ? el(`<div class="card"><div class="sk" style="height:180px"></div></div>`) : el(`<div class="empty">${I.hist}<p>Sem leituras hoje.</p></div>`)); return; }
-  if (!ms.some((m) => m.id === H.metric)) H.metric = ms[0].id;
+  const today = ymd(new Date()), days = loadDays();
+  const keys = [...new Set([...Object.keys(days), today])].filter((k) => k <= today).sort();
+  const key = H.day && keys.includes(H.day) ? H.day : today, isToday = key === today, i = keys.indexOf(key);
+  const rec = days[key] || {};
+  const pw = isToday ? STATE.series : toPts(rec.p), tp = isToday ? STATE.temps || [] : toPts(rec.t);
+  // métricas: combinado + as que existirem (hoje vêm das amostras; dias guardados só têm potência e temperatura)
+  const ms = [{ id: "combo", label: "Potência × temperatura" }, ...(isToday
+    ? METRICS.filter((m) => m.id === "temp" ? tp.length : STATE.samples.some((s) => m.pick(s) != null && (m.agg !== "avg" || m.pick(s) > 0)))
+    : METRICS.filter((m) => (m.id === "power" && pw.length) || (m.id === "temp" && tp.length)))];
+  if (!ms.some((m) => m.id === H.metric)) H.metric = "combo";
   const m = ms.find((x) => x.id === H.metric);
-  const pts = metricSeries(STATE.samples, m), vs = pts.map((p) => p.v);
-  const avg = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
-  const n = el(`<div>
-    <div class="pnav"><span></span><b>Hoje</b><span></span></div>
-    <div class="chips sc">${ms.map((x) => `<button data-m="${x.id}" aria-selected="${x.id === m.id}">${x.label}</button>`).join("")}</div>
-    <section class="card">${cardHead(I.curve, m.label, vs.length ? `máx ${fmt(Math.max(...vs), m.d)} ${m.unit}` : "")}<div class="cv"></div></section>
-    <div class="row3">${[["Mínimo", vs.length ? Math.min(...vs) : null], ["Média", avg], ["Máximo", vs.length ? Math.max(...vs) : null]]
-      .map(([k, v]) => `<div class="card mini"><span class="k">${k}</span><b>${fmt(v, m.d)} ${m.unit}</b></div>`).join("")}</div>
-    <p class="hint">A nuvem Ares fornece a curva detalhada só do dia atual. Dias anteriores: veja Semana e Mês.</p></div>`);
-  n.querySelector(".cv").appendChild(lineChart(pts, { label: m.label, d: m.d }));
+  const d = new Date(key + "T12:00"), y = ymd(addDays(new Date(), -1));
+  const label = isToday ? "Hoje" : key === y ? "Ontem" : `${DOW[d.getDay()]}, ${dm(d)}`;
+  const nav = `<div class="pnav">${i > 0 ? `<button class="iconbtn" data-k="${keys[i - 1]}" aria-label="Dia anterior">${I.chevL}</button>` : "<span></span>"}
+    <b>${label}</b>${!isToday ? `<button class="iconbtn" data-k="${keys[i + 1]}" aria-label="Próximo dia">${I.chevR}</button>` : "<span></span>"}</div>`;
+  const chips = `<div class="chips sc">${ms.map((x) => `<button data-m="${x.id}" aria-selected="${x.id === m.id}">${x.label}</button>`).join("")}</div>`;
+  let n;
+  if (!pw.length && !tp.length) {
+    n = el(`<div>${nav}${loading && isToday ? `<div class="card"><div class="sk" style="height:180px"></div></div>` : `<div class="empty">${I.hist}<p>Sem leituras neste dia.</p></div>`}</div>`);
+  } else if (m.id === "combo") {
+    const hs = heatStats(pw, tp);
+    n = el(`<div>${nav}${chips}
+      <section class="card">${cardHead(I.thermo, "Potência × temperatura", hs ? `máx ${fmt(hs.max.v, 0)} °C às ${hm(hs.max.m)}` : "")}<div class="cv"></div>${LEGEND}</section>
+      <div class="row3">
+        <div class="card mini"><span class="k">Temp. máx.</span><b>${hs ? fmt(hs.max.v, 0) + " °C" : "—"}</b></div>
+        <div class="card mini"><span class="k">Acima de ${HOT} °C</span><b>${hs ? dur(hs.hotMin) : "—"}</b></div>
+        <div class="card mini"><span class="k">Perda estim.</span><b>${hs ? fmt(hs.lossKwh, 1) + " kWh" : "—"}</b></div></div>
+      <p class="hint">${heatText(hs)}<br>Estimativa: a potência dos painéis cai ${fmt(CFG.tcoef, 2)}% por °C acima de 25 °C (ajuste em <a href="#settings">Ajustes</a>). Usa a temperatura do microinversor, preso sob os painéis, como aproximação da temperatura deles. A linha tracejada mostra quanto teria gerado sem o calor.</p></div>`);
+    n.querySelector(".cv").appendChild(dualChart(pw, tp));
+  } else {
+    const pts = isToday && m.id !== "temp" ? metricSeries(STATE.samples, m) : m.id === "temp" ? tp : pw, vs = pts.map((p) => p.v);
+    const avg = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+    n = el(`<div>${nav}${chips}
+      <section class="card">${cardHead(I.curve, m.label, vs.length ? `máx ${fmt(Math.max(...vs), m.d)} ${m.unit}` : "")}<div class="cv"></div></section>
+      <div class="row3">${[["Mínimo", vs.length ? Math.min(...vs) : null], ["Média", avg], ["Máximo", vs.length ? Math.max(...vs) : null]]
+        .map(([k, v]) => `<div class="card mini"><span class="k">${k}</span><b>${fmt(v, m.d)} ${m.unit}</b></div>`).join("")}</div></div>`);
+    n.querySelector(".cv").appendChild(lineChart(pts, { label: m.label, d: m.d }));
+  }
+  n.appendChild(el(`<p class="hint">A nuvem Ares só fornece a curva do dia atual. O SolarLog guarda cada dia neste aparelho quando o app é aberto (até 45 dias).</p>`));
   n.querySelectorAll(".chips button").forEach((b) => b.addEventListener("click", () => { H.metric = b.dataset.m; renderHistory(); }));
+  n.querySelectorAll(".pnav button").forEach((b) => b.addEventListener("click", () => { H.day = b.dataset.k === today ? null : b.dataset.k; renderHistory(); }));
   body.appendChild(n);
 }
 
@@ -803,6 +911,8 @@ function screenSettings() {
     ${field("s-tar", "Tarifa (R$ por kWh)", "Valor da sua conta de luz, com impostos. Usada para calcular a economia.", fmt(CFG.tarifa, 2), "decimal", "0,90")}
     <h3 class="mh">Retorno do investimento</h3>
     ${field("s-inv", "Valor investido no sistema (R$)", "Se foi financiado, o mais realista é usar o total pago com juros.", CFG.invest ? fmt(CFG.invest, 2) : "", "decimal", "26.000,00")}
+    <h3 class="mh">Painéis</h3>
+    ${field("s-tc", "Coeficiente de temperatura (% por °C)", "Na ficha técnica do painel (Pmax), ex.: −0,30%/°C. Usado na perda estimada por calor.", fmt(CFG.tcoef, 2), "decimal", "0,30")}
     <h3 class="mh">Impacto ambiental</h3>
     ${field("s-co2", "Fator de emissão (kg CO₂ por kWh)", "Padrão: média da rede brasileira (SIN/MCTI), 0,0385.", fmt(CFG.co2, 4), "decimal", "0,0385")}
     <h3 class="mh">Localização</h3>
@@ -821,6 +931,7 @@ function screenSettings() {
   bind("s-tar", (v) => (CFG.tarifa = pdec(v)));
   bind("s-inv", (v) => (CFG.invest = pnum(v)));
   bind("s-co2", (v) => (CFG.co2 = pdec(v)));
+  bind("s-tc", (v) => (CFG.tcoef = Math.min(1, pdec(String(v).replace(/^[−-]/, ""))) || 0.3));
   node.querySelector("#s-geo").addEventListener("click", () => {
     if (!navigator.geolocation) return toast("Localização indisponível neste aparelho.", true);
     navigator.geolocation.getCurrentPosition((p) => {

@@ -4,7 +4,7 @@
   --bg:#f3f0eb; --card:#fff; --card-2:#f6f2ec; --line:#ebe4da;
   --ink:#1f1c19; --ink-2:#6d665f; --ink-3:#9a928a;
   --acc:#f0532b; --acc-2:#fb9a4a; --acc-soft:#fde4d8; --acc-ink:#c43d17;
-  --ok:#22a05a; --ok-soft:#dcf2e4; --bad:#dc3f34; --warn:#f2a23a;
+  --temp:#6d4fe0; --ok:#22a05a; --ok-soft:#dcf2e4; --bad:#dc3f34; --warn:#f2a23a;
   --shadow:0 1px 2px rgba(60,40,20,.05),0 4px 14px rgba(60,40,20,.05);
   --sans:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --gut:16px; --r:20px;
@@ -14,7 +14,7 @@
   --bg:#121214; --card:#1d1d20; --card-2:#26262a; --line:#2e2e33;
   --ink:#f2efeb; --ink-2:#aca59d; --ink-3:#7f7972;
   --acc:#ff6a3d; --acc-2:#ffa25a; --acc-soft:#3b241b; --acc-ink:#ff8a63;
-  --ok:#3ccf7d; --ok-soft:#173526; --bad:#ff5f55; --warn:#f5b04a;
+  --temp:#a48bff; --ok:#3ccf7d; --ok-soft:#173526; --bad:#ff5f55; --warn:#f5b04a;
   --shadow:none;
   color-scheme:dark;
 }
@@ -119,6 +119,17 @@ h1,h2,h3,p{margin:0}
 .chart .base{stroke:var(--line);stroke-width:1}
 .chart .line{fill:none;stroke:var(--acc);stroke-width:1.6;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .chart .ax{fill:var(--ink-3);font-size:10px;font-family:var(--sans)}
+.chart.dual .tline{fill:none;stroke:var(--temp);stroke-width:1.8;stroke-linejoin:round}
+.chart.dual .ideal{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:3 3}
+.chart.dual .hot{fill:var(--bad);opacity:.1}
+.chart.dual .thr{stroke:var(--bad);stroke-width:1;stroke-dasharray:2 4;opacity:.7}
+.chart.dual .tr{fill:var(--temp)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:0;border-top:2px solid}
+.legend .lp{border-color:var(--acc)} .legend .lt{border-color:var(--temp)} .legend .li{border-top:2px dashed var(--ink-3)}
+.more{display:inline-flex;align-items:center;gap:2px;margin-top:10px;font-size:13px;font-weight:600;text-decoration:none}
+.more svg{width:16px;height:16px}
 .chart.bars .hit{fill:transparent;cursor:pointer}
 .chart.bars .bar{fill:var(--acc);opacity:.32;transition:opacity .15s}
 .chart.bars .sel .bar{opacity:1}
